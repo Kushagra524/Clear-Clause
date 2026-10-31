@@ -11,7 +11,8 @@ EMBEDDING_MODEL = "thenlper/gte-small"
 EMBEDDING_DIMENSION = 384
 
 # llm via huggingface inference api
-LLM_MODEL = "mistralai/Mistral-7B-Instruct-v0.3"
+# LLM_MODEL = "mistralai/Mistral-7B-Instruct-v0.3"
+LLM_MODEL = os.getenv("LLM_MODEL", "Qwen/Qwen2.5-7B-Instruct")
 LLM_MAX_TOKENS = 2048
 LLM_TEMPERATURE = 0.15
 
