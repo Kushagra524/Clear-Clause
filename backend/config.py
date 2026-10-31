@@ -32,9 +32,26 @@ RAW_DATA_DIR = os.path.join(KNOWLEDGE_BASE_DIR, "raw")
 BM25_INDEX_PATH = os.path.join(KNOWLEDGE_BASE_DIR, "bm25_index.pkl")
 
 # flask settings
-FLASK_HOST = "0.0.0.0"
-FLASK_PORT = int(os.getenv("FLASK_PORT", "5000"))
+FLASK_HOST = os.getenv("FLASK_HOST", "0.0.0.0")
+FLASK_PORT = int(os.getenv("FLASK_PORT", os.getenv("PORT", "5000")))
+APP_ENV = os.getenv("APP_ENV", "development")
 MAX_UPLOAD_SIZE = 20 * 1024 * 1024  # 20mb
 
 # supported file types
 ALLOWED_EXTENSIONS = {"pdf", "docx", "doc", "txt"}
+
+# public deployment config
+_default_cors = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
+]
+_cors_env = os.getenv("CORS_ORIGINS", "")
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in (_cors_env.split(",") if _cors_env else [])
+    if origin.strip()
+]
+if not CORS_ORIGINS:
+    CORS_ORIGINS = _default_cors
