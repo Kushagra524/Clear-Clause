@@ -23,7 +23,7 @@ def _check_rate_limit():
     _call_timestamps.append(now)
 
 
-def query_mistral(prompt, max_tokens=None, temperature=None):
+def _query_llm(prompt, max_tokens=None, temperature=None):
     # sends a prompt to the llm via huggingface inference providers (chat completions)
     _check_rate_limit()
 
@@ -76,15 +76,22 @@ def query_mistral(prompt, max_tokens=None, temperature=None):
     raise RuntimeError(f"Failed to get response from LLM after retries: {last_error}")
 
 
-
+def query_mistral(prompt, max_tokens=None, temperature=None):
+    # wrapper so every llm failure is printed to the render logs before the agents fall back
+    try:
+        return _query_llm(prompt, max_tokens, temperature)
+    except Exception as err:
+        print(f"[LLM ERROR] {err}", flush=True)
+        raise 
 
 
 def build_prompt(system_instruction, context_chunks, user_query):
     # formats a prompt with system instruction, retrieved context, and user question
+    # context is trimmed (3 chunks, 800 chars each) to stay inside free-tier token limits
     context_text = ""
-    for i, chunk in enumerate(context_chunks):
+    for i, chunk in enumerate(context_chunks[:3]):
         meta = chunk.get("metadata", chunk)
-        text = meta.get("text", str(meta))
+        text = meta.get("text", str(meta))[:800]
         section = meta.get("section", "")
         source = meta.get("source", "")
         header = f"[Source: {source}]" if source else ""
