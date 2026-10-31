@@ -1,4 +1,3 @@
-from sentence_transformers import SentenceTransformer
 import numpy as np
 import config
 
@@ -9,14 +8,20 @@ _model = None
 def get_model():
     global _model
     if _model is None:
-        _model = SentenceTransformer(config.EMBEDDING_MODEL)
+        # imported here so the server starts fast and torch loads only on first use
+        import torch
+        from sentence_transformers import SentenceTransformer
+        torch.set_num_threads(1)
+        _model = SentenceTransformer(config.EMBEDDING_MODEL, device="cpu")
     return _model
 
 
 def embed_texts(texts):
     # encodes a list of strings into dense vectors
     model = get_model()
-    embeddings = model.encode(texts, show_progress_bar=False, normalize_embeddings=True)
+    embeddings = model.encode(
+        texts, show_progress_bar=False, normalize_embeddings=True, batch_size=16
+    )
     return np.array(embeddings, dtype=np.float32)
 
 
