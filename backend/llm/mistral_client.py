@@ -1,9 +1,10 @@
+import os
 import requests
 import time
 import config
 
-# huggingface's current openai-compatible endpoint (the old api-inference one is retired)
-API_URL = "https://router.huggingface.co/v1/chat/completions"
+# groq's openai-compatible endpoint (hugging face router needs paid credits)
+API_URL = os.getenv("LLM_API_URL", "https://api.groq.com/openai/v1/chat/completions")
 
 # tracks recent calls to avoid hitting the free tier limit
 _call_timestamps = []
@@ -26,11 +27,11 @@ def query_mistral(prompt, max_tokens=None, temperature=None):
     # sends a prompt to the llm via huggingface inference providers (chat completions)
     _check_rate_limit()
 
-    if not config.HF_API_TOKEN:
-        raise RuntimeError("HF_API_TOKEN is not set")
+    if not config.LLM_API_KEY:
+        raise RuntimeError("LLM_API_KEY is not set")
 
     headers = {
-        "Authorization": f"Bearer {config.HF_API_TOKEN}",
+        "Authorization": f"Bearer {config.LLM_API_KEY}",
         "Content-Type": "application/json",
     }
 

@@ -7,12 +7,13 @@ load_dotenv()
 HF_API_TOKEN = os.getenv("HF_API_TOKEN", "")
 
 # embedding model runs locally
-EMBEDDING_MODEL = "thenlper/gte-small"
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
 EMBEDDING_DIMENSION = 384
 
 # llm via huggingface inference api
 # LLM_MODEL = "mistralai/Mistral-7B-Instruct-v0.3"
-LLM_MODEL = os.getenv("LLM_MODEL", "Qwen/Qwen2.5-7B-Instruct")
+LLM_API_KEY = os.getenv("LLM_API_KEY", "")
+LLM_MODEL = os.getenv("LLM_MODEL", "llama-3.1-8b-instant")
 LLM_MAX_TOKENS = 2048
 LLM_TEMPERATURE = 0.15
 
