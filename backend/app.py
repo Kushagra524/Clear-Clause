@@ -211,6 +211,7 @@ def analyze_document():
         return jsonify({"error": "Could not extract readable text from document"}), 422
 
     text = clean_extracted_text(text)
+    print("DEBUG content_type:", request.content_type, "| len:", len(text), "| head:", repr(text[:200]))
 
     # run agentic rag pipeline
     try:
