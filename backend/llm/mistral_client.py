@@ -1,10 +1,9 @@
 import requests
-import json
 import time
 import config
 
-
-API_URL = f"https://api-inference.huggingface.co/models/{config.LLM_MODEL}"
+# huggingface's current openai-compatible endpoint (the old api-inference one is retired)
+API_URL = "https://router.huggingface.co/v1/chat/completions"
 
 # tracks recent calls to avoid hitting the free tier limit
 _call_timestamps = []
@@ -24,62 +23,59 @@ def _check_rate_limit():
 
 
 def query_mistral(prompt, max_tokens=None, temperature=None):
-    # sends a prompt to mistral-7b via huggingface inference api
+    # sends a prompt to the llm via huggingface inference providers (chat completions)
     _check_rate_limit()
 
-    headers = {}
-    if config.HF_API_TOKEN:
-        headers["Authorization"] = f"Bearer {config.HF_API_TOKEN}"
-    headers["Content-Type"] = "application/json"
+    if not config.HF_API_TOKEN:
+        raise RuntimeError("HF_API_TOKEN is not set")
+
+    headers = {
+        "Authorization": f"Bearer {config.HF_API_TOKEN}",
+        "Content-Type": "application/json",
+    }
+
+    # the chat endpoint adds its own template, so strip the mistral-specific tags
+    clean_prompt = (
+        prompt.replace("<s>", "").replace("[INST]", "").replace("[/INST]", "").strip()
+    )
 
     payload = {
-        "inputs": prompt,
-        "parameters": {
-            "max_new_tokens": max_tokens or config.LLM_MAX_TOKENS,
-            "temperature": temperature or config.LLM_TEMPERATURE,
-            "return_full_text": False,
-            "do_sample": True,
-        }
+        "model": config.LLM_MODEL,
+        "messages": [{"role": "user", "content": clean_prompt}],
+        "max_tokens": max_tokens or config.LLM_MAX_TOKENS,
+        "temperature": temperature or config.LLM_TEMPERATURE,
     }
 
     retries = 3
+    last_error = "unknown error"
     for attempt in range(retries):
         try:
             response = requests.post(API_URL, headers=headers, json=payload, timeout=120)
 
-            if response.status_code == 503:
-                # model is loading, wait and retry
-                wait = min(30, 10 * (attempt + 1))
-                time.sleep(wait)
+            if response.status_code in (429, 503):
+                # rate limited or model busy: wait and retry
+                last_error = f"HTTP {response.status_code}: {response.text[:200]}"
+                time.sleep(min(30, 10 * (attempt + 1)))
                 continue
 
-            if response.status_code == 429:
-                # rate limited by api
-                time.sleep(60)
-                continue
+            if response.status_code >= 400:
+                # auth, permission or model problems will not fix themselves, so fail loudly
+                raise RuntimeError(f"LLM API HTTP {response.status_code}: {response.text[:300]}")
 
-            response.raise_for_status()
             result = response.json()
-
-            if isinstance(result, list) and len(result) > 0:
-                return result[0].get("generated_text", "").strip()
-            elif isinstance(result, dict):
-                return result.get("generated_text", "").strip()
-
-            return str(result)
+            return result["choices"][0]["message"]["content"].strip()
 
         except requests.exceptions.Timeout:
-            if attempt < retries - 1:
-                time.sleep(5)
-                continue
-            raise RuntimeError("LLM request timed out after retries")
+            last_error = "request timed out"
+            time.sleep(5)
         except requests.exceptions.RequestException as err:
-            if attempt < retries - 1:
-                time.sleep(5)
-                continue
-            raise RuntimeError(f"LLM API error: {err}")
+            last_error = f"network error: {err}"
+            time.sleep(5)
 
-    raise RuntimeError("Failed to get response from LLM after retries")
+    raise RuntimeError(f"Failed to get response from LLM after retries: {last_error}")
+
+
+
 
 
 def build_prompt(system_instruction, context_chunks, user_query):
