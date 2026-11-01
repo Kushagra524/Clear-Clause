@@ -4,6 +4,7 @@ import uuid
 import json
 import tempfile
 import time
+import threading
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
@@ -29,11 +30,9 @@ document_store = {}
 # initialize orchestrator once at startup
 orchestrator = AgentOrchestrator()
 
-# load the embedding model in the background at startup so the first request is not slow
-import threading
-
 
 def _warm_up():
+    # load the embedding model in the background so the first request is not slow
     try:
         from rag.embeddings import embed_query
         embed_query("warm up")
@@ -206,6 +205,9 @@ def analyze_document():
         try:
             text = extract_text(tmp_path)
             size = os.path.getsize(tmp_path)
+        except Exception as err:
+            print(f"[EXTRACT ERROR] {err}", flush=True)
+            return jsonify({"error": f"Could not read this file: {err}"}), 422
         finally:
             os.unlink(tmp_path)
 
@@ -219,19 +221,25 @@ def analyze_document():
         if not content:
             return jsonify({"error": "No document content provided"}), 400
 
-        text = extract_text_from_content(content, filename)
+        try:
+            text = extract_text_from_content(content, filename)
+        except Exception as err:
+            return jsonify({"error": str(err)}), 422
 
     if not text or len(text.strip()) < 20:
-        return jsonify({"error": "Could not extract readable text from document"}), 422
+        return jsonify({"error": "Could not extract readable text from document. If this is a scanned PDF, it needs a text layer."}), 422
 
     text = clean_extracted_text(text)
-    print("DEBUG content_type:", request.content_type, "| len:", len(text), "| head:", repr(text[:200]))
 
     # run agentic rag pipeline
     try:
         analysis = orchestrator.analyze_document(text, filename)
     except Exception as err:
+        print(f"[ANALYSIS ERROR] {err}", flush=True)
         return jsonify({"error": f"Analysis failed: {str(err)}"}), 500
+
+    if not analysis:
+        return jsonify({"error": "Analysis returned no result"}), 500
 
     doc_id = str(uuid.uuid4())
     response = build_document_response(doc_id, filename, size, analysis)

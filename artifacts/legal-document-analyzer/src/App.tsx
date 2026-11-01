@@ -153,12 +153,7 @@ interface LibraryDoc {
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
-// backend address: set VITE_API_URL on Vercel, falls back to local backend in development
-const BACKEND_URL = (
-  (import.meta as unknown as { env: Record<string, string | undefined> }).env.VITE_API_URL ??
-  'http://localhost:5000'
-).replace(/\/$/, '');
-const API_BASE = `${BACKEND_URL}/api`;
+const API_BASE = 'http://localhost:5000/api';
 
 function formatBytes(bytes: number) {
   if (!bytes) return '—';
