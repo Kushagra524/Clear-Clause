@@ -29,6 +29,20 @@ document_store = {}
 # initialize orchestrator once at startup
 orchestrator = AgentOrchestrator()
 
+# load the embedding model in the background at startup so the first request is not slow
+import threading
+
+
+def _warm_up():
+    try:
+        from rag.embeddings import embed_query
+        embed_query("warm up")
+    except Exception as err:
+        print(f"Warm-up skipped: {err}", flush=True)
+
+
+threading.Thread(target=_warm_up, daemon=True).start()
+
 
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in config.ALLOWED_EXTENSIONS

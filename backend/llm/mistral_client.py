@@ -47,16 +47,27 @@ def _query_llm(prompt, max_tokens=None, temperature=None):
         "temperature": temperature or config.LLM_TEMPERATURE,
     }
 
+    # reasoning models think before answering, so keep that short (set LLM_REASONING_EFFORT="" on Render to disable)
+    effort = os.getenv("LLM_REASONING_EFFORT", "low")
+    if effort and "gpt-oss" in config.LLM_MODEL:
+        payload["reasoning_effort"] = effort
+
+
     retries = 3
     last_error = "unknown error"
     for attempt in range(retries):
         try:
             response = requests.post(API_URL, headers=headers, json=payload, timeout=120)
 
+
             if response.status_code in (429, 503):
-                # rate limited or model busy: wait and retry
+            # rate limited or model busy: wait as long as the server asks, up to 30 s
                 last_error = f"HTTP {response.status_code}: {response.text[:200]}"
-                time.sleep(min(30, 10 * (attempt + 1)))
+                try:
+                    wait = min(30.0, float(response.headers.get("retry-after", "")))
+                except ValueError:
+                    wait = min(30, 10 * (attempt + 1))
+                time.sleep(wait)
                 continue
 
             if response.status_code >= 400:
