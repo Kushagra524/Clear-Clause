@@ -3,22 +3,39 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# huggingface api token for mistral inference
+# huggingface api token
 HF_API_TOKEN = os.getenv("HF_API_TOKEN", "")
 
-# embedding model runs locally
+# embedding model runs locally with FastEmbed (ONNX runtime, ultra fast and lightweight)
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
 EMBEDDING_DIMENSION = 384
 
-# llm via huggingface inference api
-# LLM_MODEL = "mistralai/Mistral-7B-Instruct-v0.3"
-LLM_API_KEY = os.getenv("LLM_API_KEY", "")
-LLM_MODEL = os.getenv("LLM_MODEL", "llama-3.1-8b-instant")
-LLM_MAX_TOKENS = 2048
-LLM_TEMPERATURE = 0.15
+# llm api configuration - supports Groq, HuggingFace, or custom OpenAI-compatible endpoint
+LLM_API_KEY = (
+    os.getenv("LLM_API_KEY")
+    or os.getenv("GROQ_API_KEY")
+    or os.getenv("GROQ_Token")
+    or os.getenv("GROQ_TOKEN")
+    or os.getenv("HF_API_TOKEN")
+    or ""
+).strip()
 
-# cross-encoder reranker runs locally
-RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+LLM_MODEL = os.getenv("LLM_MODEL", "llama-3.1-8b-instant")
+LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "2048"))
+LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.15"))
+
+# API endpoint: default to Groq (ultra fast, high free-tier limits)
+LLM_API_URL = os.getenv("LLM_API_URL", "")
+if not LLM_API_URL:
+    if LLM_API_KEY.startswith("gsk_"):
+        LLM_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+    elif LLM_API_KEY.startswith("hf_"):
+        LLM_API_URL = "https://router.huggingface.co/mistralai/Mistral-7B-Instruct-v0.3/v1/chat/completions"
+    else:
+        LLM_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+
+# cross-encoder reranker (disabled by default for CPU performance and minimal RAM)
+RERANKER_MODEL = os.getenv("RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
 
 # rag pipeline settings
 CHUNK_SIZE = 512
@@ -35,8 +52,8 @@ BM25_INDEX_PATH = os.path.join(KNOWLEDGE_BASE_DIR, "bm25_index.pkl")
 
 # flask settings
 FLASK_HOST = os.getenv("FLASK_HOST", "0.0.0.0")
-FLASK_PORT = int(os.getenv("FLASK_PORT", os.getenv("PORT", "5000")))
-APP_ENV = os.getenv("APP_ENV", "development")
+FLASK_PORT = int(os.getenv("PORT", os.getenv("FLASK_PORT", "7860")))
+APP_ENV = os.getenv("APP_ENV", "production")
 MAX_UPLOAD_SIZE = 20 * 1024 * 1024  # 20mb
 
 # supported file types
@@ -44,6 +61,7 @@ ALLOWED_EXTENSIONS = {"pdf", "docx", "doc", "txt"}
 
 # public deployment config
 _default_cors = [
+    "*",
     "http://localhost:5173",
     "http://localhost:3000",
     "http://127.0.0.1:5173",

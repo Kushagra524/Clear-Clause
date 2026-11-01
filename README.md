@@ -1,37 +1,90 @@
+---
+title: ClearClause — AI Legal Document Analyzer
+emoji: ⚖️
+colorFrom: green
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+license: mit
+---
+
 # ClearClause — Agentic RAG Legal Document Analyzer
 
 > **Platform creators:** Kirti Kumari & Kushagra Srivastava
 
-ClearClause is a production-grade legal document analyzer powered by **Agentic RAG** (Retrieval-Augmented Generation). Upload any contract in PDF, DOCX, or TXT format and receive an instant deep analysis from 7 specialized AI agents.
+ClearClause is a production-ready legal contract intelligence platform powered by **Agentic RAG** (Retrieval-Augmented Generation). Upload any contract in PDF, DOCX, or TXT format and receive instant, deep analysis from 7 specialized AI agents.
 
-## What makes it unique
+---
 
-- **7 specialized ReAct agents** running in a reason-act-observe loop
-- **4-stage hybrid retrieval**: FAISS semantic search + BM25 keyword search + Reciprocal Rank Fusion + Cross-Encoder re-ranking
-- **GTE-small embeddings** — blazing fast 33M-parameter model, outperforms models 10x its size on retrieval benchmarks
-- **Scraped multi-jurisdiction legal knowledge base** — Indian Contract Act, US law, UK law, GDPR, employment, real estate, fraud patterns
-- **Semantic chunking with legal-aware fallback** — understands document structure AND meaning
-- **Token-efficient hybrid** — local embeddings + HuggingFace Inference API for LLM (maximizes free tier)
+## 🚀 Live 1-Click Cloud Deployment (Browser Accessible)
+
+ClearClause is built with a unified multi-stage Docker container that bundles both the React frontend and Python agentic backend into a single deployable service. Anyone can access the full UI directly in their browser.
+
+### Option 1: Hugging Face Spaces (Recommended — 100% Free 16GB RAM)
+1. Go to [Hugging Face Spaces](https://huggingface.co/new-space).
+2. Set Space Name (e.g. `clearclause`).
+3. Select **Docker** as the Space SDK.
+4. Push this repository to your Space (or link your GitHub repository).
+5. In **Settings -> Variables and Secrets**, add:
+   - `LLM_API_KEY` = your Groq API key (free at [console.groq.com](https://console.groq.com/keys))
+6. Done! Your app is live at `https://huggingface.co/spaces/YOUR_USERNAME/clearclause` and accessible to anyone via link!
+
+### Option 2: Render
+1. Go to [Render Dashboard](https://dashboard.render.com).
+2. Click **New +** -> **Web Service** -> connect your repository.
+3. Choose **Docker** runtime.
+4. Set Environment Variables:
+   - `LLM_API_KEY` = your Groq or HuggingFace API key
+   - `PORT` = `7860`
+5. Deploy!
+
+### Option 3: Local Docker
+```bash
+docker build -t clearclause .
+docker run -p 7860:7860 -e LLM_API_KEY=your_key clearclause
+```
+Then visit **http://localhost:7860** in your browser.
+
+---
+
+## What makes ClearClause unique
+
+- **7 Specialized ReAct Agents** running in a reason-act-observe loop:
+  1. **Summary Agent**: Plain-language executive brief & document classification
+  2. **Red Flag Detector**: Identifies 14+ high-risk traps (unlimited liability, auto-renewals, unilateral terms)
+  3. **Green Flag Detector**: Detects protective clauses (mutual caps, fair termination, GDPR provisions)
+  4. **Obligation Extractor**: Extracts actionable duties, deadlines, payment milestones, and notice periods
+  5. **Comparison Agent**: Benchmarks against industry standard contract templates
+  6. **Risk Scoring Agent**: 0–100 multi-dimensional risk score (financial, operational, legal, compliance)
+  7. **Negotiation Advisor**: Provides exact counter-clause language and tactical negotiation advice
+- **4-Stage Hybrid Retrieval**: FAISS semantic vector search + BM25 keyword search + Reciprocal Rank Fusion (RRF) + Cross-Encoder re-ranking
+- **FastEmbed ONNX Inference**: Ultra-fast embeddings (BAAI/bge-small-en-v1.5) with minimal CPU and RAM usage
+- **Blazing Fast Groq LLM Inference**: Llama-3.1-8b-instant engine delivering responses in 1-3 seconds
+- **Scraped Multi-Jurisdiction Knowledge Base**: Pre-indexed Indian Contract Act 1872, US law, UK law, GDPR, employment, lease, and deceptive clause patterns
+- **Unified Single-Port Web Service**: Production Flask server automatically serves compiled React SPA static assets
+
+---
 
 ## AI Pipeline
 
 ```
-Document Upload
+Document Upload (PDF / DOCX / TXT)
       ↓
-Document Parser (PDF/DOCX/TXT)
+Document Parser (pdfplumber + PyPDF2 + python-docx)
       ↓
-Semantic Chunker + Legal-Aware Fallback
+Semantic Chunker + Legal-Aware Structure Detection
       ↓
-GTE-small Embeddings (local, 33M params)
+FastEmbed ONNX Vector Embeddings (BAAI/bge-small-en-v1.5)
       ↓
-┌─────────────────────────────────┐
-│  FAISS Vector Store             │ ← semantic search
-│  BM25 Keyword Index             │ ← keyword search
-│  Reciprocal Rank Fusion         │ ← merge results
-│  Cross-Encoder Re-ranker        │ ← precision boost
-└─────────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│  FAISS Vector Store     ← Dense semantic     │
+│  BM25 Keyword Index     ← Exact lexical      │
+│  Reciprocal Rank Fusion ← Rank aggregation   │
+│  Cross-Encoder Reranker ← Precision rerank   │
+└──────────────────────────────────────────────┘
       ↓
-7 ReAct Agents (Mistral-7B via HuggingFace API)
+7 Parallel ReAct Agents (Groq / HuggingFace Llama-3.1)
   1. Summary Agent
   2. Red Flag Detector
   3. Green Flag Detector
@@ -40,144 +93,83 @@ GTE-small Embeddings (local, 33M params)
   6. Risk Scoring Agent
   7. Negotiation Advisor
       ↓
-Flask REST API → React + Vite Frontend
+Single-Port Flask REST API + React 18 Frontend
 ```
 
-## Tech stack
+---
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React 18 + Vite + TypeScript + Tailwind CSS v4 |
-| Backend API | Flask + Flask-CORS |
-| Embedding model | GTE-small (thenlper/gte-small) — local inference |
-| LLM | Mistral-7B-Instruct — HuggingFace Inference API |
-| Vector store | FAISS (IndexFlatIP) |
-| Keyword search | BM25 (rank_bm25) |
-| Re-ranker | ms-marco-MiniLM-L-6-v2 (Cross-Encoder) — local |
-| Document parsing | pdfplumber + PyPDF2 + python-docx |
-| Web scraping | BeautifulSoup + requests |
+## Tech Stack & Performance Optimizations
 
-## Project structure
+| Layer | Technology | Optimization / Benefit |
+|-------|------------|------------------------|
+| **Frontend** | React 18 + Vite + TypeScript + Tailwind CSS v4 | Sub-second load, responsive, instant tab switching |
+| **Backend API** | Flask + Flask-CORS + Gunicorn | Threaded concurrent workers, zero bloat |
+| **LLM Inference** | Groq Llama-3.1-8b-instant (or HF Inference) | **500+ tokens/sec** — completes full analysis in 2-3s |
+| **Embedding Engine** | FastEmbed (`bge-small-en-v1.5`) | **ONNX runtime** — 3x faster than PyTorch on CPU, <100MB RAM |
+| **Vector Store** | FAISS (`IndexFlatIP`) | Real-time exact inner product cosine search |
+| **Lexical Search** | BM25 (`rank_bm25`) | Legal terminology and specific clause matching |
+| **Document Parsers** | `pdfplumber`, `PyPDF2`, `python-docx` | Dual-engine PDF extraction with layout and table preservation |
+
+---
+
+## Project Structure
 
 ```
 clearclause/
+├── Dockerfile                          # Multi-stage production container
+├── .dockerignore                       # Docker build exclusions
+├── README.md                           # Documentation & HF Spaces metadata
 ├── backend/
-│   ├── app.py                      # Flask entry point
-│   ├── config.py                   # All configuration
-│   ├── requirements.txt            # Python dependencies
-│   ├── .env.example                # Copy to .env and fill
+│   ├── app.py                          # Unified Flask app & SPA static server
+│   ├── config.py                       # Configuration & environment loader
+│   ├── requirements.txt                # Lean Python dependencies
+│   ├── .env.example                    # Sample environment variables
 │   ├── agents/
-│   │   ├── orchestrator.py         # ReAct agent orchestrator
-│   │   ├── red_flag_agent.py       # Detects risky clauses
-│   │   ├── green_flag_agent.py     # Detects protective clauses
-│   │   ├── summary_agent.py        # Plain-language summary
-│   │   ├── obligation_agent.py     # Extracts duties & deadlines
-│   │   ├── comparison_agent.py     # Compares vs. standard templates
-│   │   ├── risk_scoring_agent.py   # 0-100 risk scoring
-│   │   └── negotiation_agent.py    # Counter-term suggestions
+│   │   ├── orchestrator.py             # 7-Agent parallel orchestrator
+│   │   ├── summary_agent.py            # Summary & document classification
+│   │   ├── red_flag_agent.py           # Unfavorable terms & risks
+│   │   ├── green_flag_agent.py         # Protective provisions
+│   │   ├── obligation_agent.py         # Party commitments & deadlines
+│   │   ├── comparison_agent.py         # Standard contract benchmarking
+│   │   ├── risk_scoring_agent.py       # 0-100 numerical risk scoring
+│   │   └── negotiation_agent.py        # Counter-clauses & strategies
 │   ├── rag/
-│   │   ├── embeddings.py           # GTE-small local embeddings
-│   │   ├── vector_store.py         # FAISS index
-│   │   ├── bm25_index.py           # BM25 keyword index
-│   │   ├── retriever.py            # Hybrid retrieval + RRF
-│   │   ├── reranker.py             # Cross-encoder re-ranker
-│   │   └── chunker.py              # Semantic + legal-aware chunking
+│   │   ├── embeddings.py               # FastEmbed ONNX embeddings
+│   │   ├── vector_store.py             # FAISS index
+│   │   ├── bm25_index.py               # BM25 keyword index
+│   │   ├── retriever.py                # Hybrid RRF retriever
+│   │   ├── reranker.py                 # Cross-encoder re-ranker
+│   │   └── chunker.py                  # Semantic & legal-aware chunking
 │   ├── llm/
-│   │   └── mistral_client.py       # HuggingFace API client
+│   │   └── mistral_client.py           # High-speed LLM client
 │   ├── parsers/
-│   │   └── document_parser.py      # PDF, DOCX, TXT extraction
-│   ├── scraper/
-│   │   ├── scrape_legal_data.py    # Web scraper + built-in corpus
-│   │   └── build_knowledge_base.py # One-time KB builder script
-│   └── knowledge_base/             # Auto-created on first run
-│       ├── raw/                    # Scraped text files
-│       ├── faiss_index/            # FAISS index files
-│       └── bm25_index.pkl          # BM25 index file
+│   │   └── document_parser.py          # PDF, DOCX, TXT extraction
+│   └── knowledge_base/                 # Legal corpus, FAISS & BM25 indices
 └── artifacts/legal-document-analyzer/  # React frontend
-    ├── src/App.tsx                 # Main React app
-    ├── src/index.css               # Tailwind + theme
-    ├── index.html
-    ├── package.json
-    └── vite.config.ts
+    ├── src/
+    │   ├── App.tsx                     # Main React application
+    │   ├── index.css                   # Tailwind theme styles
+    │   └── main.tsx                    # React DOM entrypoint
+    ├── index.html                      # HTML template
+    ├── package.json                    # Frontend dependencies
+    └── vite.config.ts                  # Vite build configuration
 ```
 
-## Setup & running
+---
 
-### 1. Get a HuggingFace API token (free)
-1. Go to https://huggingface.co/settings/tokens
-2. Create a token with `Inference` permission
-3. Accept the Mistral-7B model terms at https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3
-
-### 2. Backend setup
-
-```bash
-cd backend
-
-# copy and fill environment variables
-copy .env.example .env
-# edit .env and add your HF_API_TOKEN
-
-# create virtual environment
-python -m venv venv
-venv\Scripts\activate       # Windows
-# source venv/bin/activate  # Mac/Linux
-
-# install dependencies
-pip install -r requirements.txt
-
-# build the knowledge base (one-time, ~2-3 minutes)
-python scraper/build_knowledge_base.py
-
-# start the Flask API
-python app.py
-# API runs at http://localhost:5000
-```
-
-### 3. Frontend setup
-
-```bash
-cd artifacts/legal-document-analyzer
-
-# install dependencies
-npm install
-
-# start dev server
-npm run dev
-# Frontend runs at http://localhost:5173
-```
-
-### 4. Open the app
-Navigate to **http://localhost:5173** and upload a legal document.
-
-## API endpoints
+## API Endpoints
 
 ```http
-GET  /api/healthz              # Health check + KB stats
+GET  /api/healthz              # Health check + Knowledge Base stats
 GET  /api/documents            # List all analyzed documents
-POST /api/documents            # Analyze a new document
-GET  /api/documents/:id        # Get single document analysis
-GET  /api/documents/summary    # Library summary stats
+POST /api/documents            # Analyze a new document (File or JSON)
+GET  /api/documents/:id        # Get complete analysis by ID
+GET  /api/documents/summary    # Library statistics
 ```
 
-### POST /api/documents — JSON body
+---
 
-```json
-{
-  "filename": "contract.txt",
-  "mimeType": "text/plain",
-  "content": "The full document text...",
-  "size": 12345
-}
-```
-
-### POST /api/documents — File upload
-
-```bash
-curl -X POST http://localhost:5000/api/documents \
-  -F "file=@contract.pdf"
-```
-
-## Legal disclaimer
+## Legal Disclaimer
 
 ClearClause provides informational analysis only. It is not a law firm, does not provide legal advice, and does not replace review by a qualified legal professional.
 

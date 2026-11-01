@@ -5,7 +5,8 @@ import json
 import tempfile
 import time
 import threading
-from flask import Flask, request, jsonify
+from datetime import datetime, timezone, timedelta
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -13,8 +14,15 @@ import config
 from parsers.document_parser import extract_text, extract_text_from_content, clean_extracted_text
 from agents.orchestrator import AgentOrchestrator
 
-app = Flask(__name__)
-allowed_origins = list(dict.fromkeys([
+# locate frontend static directory
+STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+if not os.path.exists(STATIC_DIR):
+    alt_static = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "artifacts", "legal-document-analyzer", "dist")
+    if os.path.exists(alt_static):
+        STATIC_DIR = alt_static
+
+app = Flask(__name__, static_folder=STATIC_DIR, static_url_path="")
+allowed_origins = "*" if "*" in config.CORS_ORIGINS else list(dict.fromkeys([
     *config.CORS_ORIGINS,
     "http://localhost:5173",
     "http://localhost:3000",
@@ -24,7 +32,7 @@ allowed_origins = list(dict.fromkeys([
 CORS(app, origins=allowed_origins)
 app.config["MAX_CONTENT_LENGTH"] = config.MAX_UPLOAD_SIZE
 
-# in-memory document store (replace with postgres in production)
+# in-memory document store
 document_store = {}
 
 # initialize orchestrator once at startup
@@ -32,10 +40,10 @@ orchestrator = AgentOrchestrator()
 
 
 def _warm_up():
-    # load the embedding model in the background so the first request is not slow
+    # load the embedding model in the background so the first request is instant
     try:
         from rag.embeddings import embed_query
-        embed_query("warm up")
+        embed_query("contract agreement legal analysis")
     except Exception as err:
         print(f"Warm-up skipped: {err}", flush=True)
 
@@ -75,7 +83,7 @@ def build_document_response(doc_id, filename, size, analysis_result):
     overall_score = risk_scores.get("overall_score", 50)
     risk_level = map_risk_level(analysis_result.get("risk_level", "medium"))
 
-    # merge red flags, green flags and dimension scores into unified risks list for frontend
+    # merge red flags and green flags into unified risks list for frontend overview
     risks = []
     for rf in red_flags:
         risks.append({
@@ -152,7 +160,6 @@ def health():
 @app.route("/api/documents", methods=["GET"])
 def list_documents():
     docs = list(document_store.values())
-    # return most recent first
     docs.sort(key=lambda d: d.get("createdAt", ""), reverse=True)
     return jsonify(docs)
 
@@ -163,8 +170,7 @@ def document_summary():
     total = len(docs)
     high_risk = sum(1 for d in docs if d.get("riskLevel") == "high")
 
-    from datetime import datetime, timedelta
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     week_ago = now - timedelta(days=7)
     this_week = sum(1 for d in docs if d.get("createdAt", "") >= week_ago.strftime("%Y-%m-%d"))
 
@@ -182,13 +188,12 @@ def document_summary():
 
 @app.route("/api/documents", methods=["POST"])
 def analyze_document():
-    # handles both file upload and text content submission
     text = None
     filename = "document.txt"
     size = 0
 
     if request.content_type and "multipart/form-data" in request.content_type:
-        # file upload path
+        # multipart file upload path (for PDF, DOCX, TXT)
         if "file" not in request.files:
             return jsonify({"error": "No file provided"}), 400
         file = request.files["file"]
@@ -198,7 +203,8 @@ def analyze_document():
             return jsonify({"error": f"Unsupported file type. Allowed: {', '.join(config.ALLOWED_EXTENSIONS)}"}), 400
 
         filename = file.filename
-        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(filename)[1]) as tmp:
+        suffix = os.path.splitext(filename)[1]
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             file.save(tmp.name)
             tmp_path = tmp.name
 
@@ -209,10 +215,11 @@ def analyze_document():
             print(f"[EXTRACT ERROR] {err}", flush=True)
             return jsonify({"error": f"Could not read this file: {err}"}), 422
         finally:
-            os.unlink(tmp_path)
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
 
     else:
-        # json body path (matches existing frontend api shape)
+        # JSON body path
         body = request.get_json(silent=True) or {}
         content = body.get("content", "")
         filename = body.get("filename", "document.txt")
@@ -227,11 +234,11 @@ def analyze_document():
             return jsonify({"error": str(err)}), 422
 
     if not text or len(text.strip()) < 20:
-        return jsonify({"error": "Could not extract readable text from document. If this is a scanned PDF, it needs a text layer."}), 422
+        return jsonify({"error": "Could not extract readable text from document. If this is a scanned PDF, it needs an OCR text layer."}), 422
 
     text = clean_extracted_text(text)
 
-    # run agentic rag pipeline
+    # run agentic RAG pipeline
     try:
         analysis = orchestrator.analyze_document(text, filename)
     except Exception as err:
@@ -258,11 +265,33 @@ def get_document(doc_id):
 
 @app.route("/api/documents/<doc_id>/reanalyze", methods=["POST"])
 def reanalyze_document(doc_id):
-    # re-runs analysis on an already-stored document
     doc = document_store.get(doc_id)
     if not doc:
         return jsonify({"error": "Document not found"}), 404
     return jsonify({"message": "Reanalysis would require the original document text."}), 400
+
+
+# serve the built React frontend in production (Single Page App catch-all)
+@app.route("/", defaults={"path": ""})
+@app.route("/<path:path>")
+def serve_frontend(path):
+    if os.path.exists(STATIC_DIR):
+        full_path = os.path.join(STATIC_DIR, path)
+        if path and os.path.isfile(full_path):
+            return send_from_directory(STATIC_DIR, path)
+        index_file = os.path.join(STATIC_DIR, "index.html")
+        if os.path.isfile(index_file):
+            return send_from_directory(STATIC_DIR, "index.html")
+
+    return jsonify({
+        "app": "ClearClause - AI Legal Document Analyzer",
+        "status": "online",
+        "api_docs": {
+            "health": "/api/healthz",
+            "documents": "/api/documents",
+            "summary": "/api/documents/summary"
+        }
+    })
 
 
 if __name__ == "__main__":
@@ -274,6 +303,5 @@ if __name__ == "__main__":
             build()
         except Exception as err:
             print(f"Warning: Could not build knowledge base: {err}")
-            print("The app will still work with reduced context quality.")
 
     app.run(host=config.FLASK_HOST, port=config.FLASK_PORT, debug=False)

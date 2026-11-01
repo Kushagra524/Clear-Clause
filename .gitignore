@@ -1,11 +1,27 @@
+# Dependencies
 node_modules/
+artifacts/legal-document-analyzer/node_modules/
+
+# Build artifacts
 dist/
+artifacts/legal-document-analyzer/dist/
+backend/static/
+
+# Environment variables & secrets
 .env
+backend/.env
+
+# Python artifacts
 *.pyc
 __pycache__/
+backend/**/__pycache__/
 venv/
 backend/venv/
-backend/knowledge_base/
-backend/.env
+
+# Large model cache downloads (keep prebuilt indices, ignore downloaded weights cache)
+backend/knowledge_base/model_cache/
+
+# OS and logs
 .DS_Store
+Thumbs.db
 *.log

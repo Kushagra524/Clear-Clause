@@ -3,17 +3,12 @@ import requests
 import time
 import config
 
-# groq's openai-compatible endpoint (hugging face router needs paid credits)
-API_URL = os.getenv("LLM_API_URL", "https://api.groq.com/openai/v1/chat/completions")
-
-# tracks recent calls to avoid hitting the free tier limit
 _call_timestamps = []
 RATE_LIMIT_WINDOW = 3600
-MAX_CALLS_PER_HOUR = 900
+MAX_CALLS_PER_HOUR = 3600
 
 
 def _check_rate_limit():
-    # prevents exhausting the free tier api quota
     global _call_timestamps
     now = time.time()
     _call_timestamps = [t for t in _call_timestamps if now - t < RATE_LIMIT_WINDOW]
@@ -24,54 +19,54 @@ def _check_rate_limit():
 
 
 def _query_llm(prompt, max_tokens=None, temperature=None):
-    # sends a prompt to the llm via huggingface inference providers (chat completions)
     _check_rate_limit()
 
-    if not config.LLM_API_KEY:
-        raise RuntimeError("LLM_API_KEY is not set")
+    api_key = config.LLM_API_KEY
+    if not api_key:
+        raise RuntimeError("LLM_API_KEY / GROQ_API_KEY is not set. Please set it in your environment or .env file.")
+
+    api_url = config.LLM_API_URL or "https://api.groq.com/openai/v1/chat/completions"
 
     headers = {
-        "Authorization": f"Bearer {config.LLM_API_KEY}",
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
 
-    # the chat endpoint adds its own template, so strip the mistral-specific tags
     clean_prompt = (
-        prompt.replace("<s>", "").replace("[INST]", "").replace("[/INST]", "").strip()
+        prompt.replace("<s>", "").replace("</s>", "").replace("[INST]", "").replace("[/INST]", "").strip()
     )
 
     payload = {
         "model": config.LLM_MODEL,
-        "messages": [{"role": "user", "content": clean_prompt}],
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are ClearClause, an expert legal contract analysis assistant. Always respond in valid, well-structured JSON format."
+            },
+            {"role": "user", "content": clean_prompt}
+        ],
         "max_tokens": max_tokens or config.LLM_MAX_TOKENS,
         "temperature": temperature or config.LLM_TEMPERATURE,
     }
 
-    # reasoning models think before answering, so keep that short (set LLM_REASONING_EFFORT="" on Render to disable)
-    effort = os.getenv("LLM_REASONING_EFFORT", "low")
-    if effort and "gpt-oss" in config.LLM_MODEL:
-        payload["reasoning_effort"] = effort
-
-
-    retries = 3
+    retries = int(os.getenv("LLM_RETRIES", "2"))
+    timeout = int(os.getenv("LLM_TIMEOUT", "20"))
     last_error = "unknown error"
+
     for attempt in range(retries):
         try:
-            response = requests.post(API_URL, headers=headers, json=payload, timeout=120)
-
+            response = requests.post(api_url, headers=headers, json=payload, timeout=timeout)
 
             if response.status_code in (429, 503):
-            # rate limited or model busy: wait as long as the server asks, up to 30 s
                 last_error = f"HTTP {response.status_code}: {response.text[:200]}"
                 try:
-                    wait = min(30.0, float(response.headers.get("retry-after", "")))
-                except ValueError:
-                    wait = min(30, 10 * (attempt + 1))
+                    wait = min(20.0, float(response.headers.get("retry-after", "")))
+                except (ValueError, TypeError):
+                    wait = min(15, 3 * (attempt + 1))
                 time.sleep(wait)
                 continue
 
             if response.status_code >= 400:
-                # auth, permission or model problems will not fix themselves, so fail loudly
                 raise RuntimeError(f"LLM API HTTP {response.status_code}: {response.text[:300]}")
 
             result = response.json()
@@ -79,26 +74,23 @@ def _query_llm(prompt, max_tokens=None, temperature=None):
 
         except requests.exceptions.Timeout:
             last_error = "request timed out"
-            time.sleep(5)
+            time.sleep(1)
         except requests.exceptions.RequestException as err:
             last_error = f"network error: {err}"
-            time.sleep(5)
+            time.sleep(1)
 
-    raise RuntimeError(f"Failed to get response from LLM after retries: {last_error}")
+    raise RuntimeError(f"Failed to get response from LLM after {retries} attempts: {last_error}")
 
 
 def query_mistral(prompt, max_tokens=None, temperature=None):
-    # wrapper so every llm failure is printed to the render logs before the agents fall back
     try:
         return _query_llm(prompt, max_tokens, temperature)
     except Exception as err:
         print(f"[LLM ERROR] {err}", flush=True)
-        raise 
+        raise
 
 
 def build_prompt(system_instruction, context_chunks, user_query):
-    # formats a prompt with system instruction, retrieved context, and user question
-    # context is trimmed (3 chunks, 800 chars each) to stay inside free-tier token limits
     context_text = ""
     for i, chunk in enumerate(context_chunks[:3]):
         meta = chunk.get("metadata", chunk)
@@ -110,14 +102,14 @@ def build_prompt(system_instruction, context_chunks, user_query):
             header += f" [Section: {section}]"
         context_text += f"\n--- Reference {i+1} {header} ---\n{text}\n"
 
-    prompt = f"""<s>[INST] {system_instruction}
+    prompt = f"""{system_instruction}
 
 LEGAL KNOWLEDGE CONTEXT:
 {context_text}
 
-DOCUMENT/QUERY:
+DOCUMENT / CONTRACT TO ANALYZE:
 {user_query}
 
-Provide your analysis in valid JSON format. Be precise and cite specific clauses where possible. [/INST]"""
+CRITICAL: Return ONLY valid JSON as requested. Do not include markdown codeblocks or conversational text outside the JSON."""
 
     return prompt

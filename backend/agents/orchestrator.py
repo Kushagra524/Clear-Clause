@@ -10,8 +10,8 @@ from agents.risk_scoring_agent import score_risks
 from agents.negotiation_agent import suggest_negotiations
 from rag.retriever import HybridRetriever
 
-# how many agents may call the llm at the same time (lower this if you see rate-limit errors)
-AGENT_WORKERS = int(os.getenv("AGENT_WORKERS", "4"))
+# 6 workers allow all 5 stage-1 agents to run concurrently without bottlenecking
+AGENT_WORKERS = int(os.getenv("AGENT_WORKERS", "6"))
 
 
 def _timed(fn):
@@ -59,9 +59,7 @@ class AgentOrchestrator:
             "agents_failed": [],
         }
 
-        # retrieve legal knowledge for the different
         # retrieve legal knowledge for the different analysis aspects
-        
         queries = {
             "red_flags": f"risky unfavorable clauses in {filename} contract agreement",
             "green_flags": f"protective favorable clauses in {filename} contract agreement",

@@ -1,6 +1,7 @@
 import {
   type ChangeEvent,
   type ReactNode,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -153,7 +154,7 @@ interface LibraryDoc {
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
-const API_BASE = 'http://localhost:5000/api';
+const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
 function formatBytes(bytes: number) {
   if (!bytes) return '—';
@@ -236,6 +237,7 @@ let setSelectedDoc: (d: AnalysisResult | null) => void = () => {};
 
 function Shell({ children, onHome }: { children: ReactNode; onHome: () => void }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [howItWorksOpen, setHowItWorksOpen] = useState(false);
   return (
     <div className="grain min-h-[100dvh] bg-background">
       <header className="border-b border-border/80 bg-[#f8f6ef]/85 backdrop-blur-md">
@@ -256,14 +258,14 @@ function Shell({ children, onHome }: { children: ReactNode; onHome: () => void }
             )}
           >
             <button
-              onClick={onHome}
+              onClick={() => { onHome(); setMenuOpen(false); }}
               className="block py-2 text-sm font-medium text-foreground/75 transition-colors hover:text-primary bg-transparent border-0 cursor-pointer"
             >
               Library
             </button>
             <button
               className="flex items-center gap-2 py-2 text-sm font-medium text-foreground/75 transition-colors hover:text-primary bg-transparent border-0 cursor-pointer"
-              onClick={() => setMenuOpen(false)}
+              onClick={() => { setHowItWorksOpen(true); setMenuOpen(false); }}
             >
               <CircleHelp size={16} /> How it works
             </button>
@@ -281,6 +283,80 @@ function Shell({ children, onHome }: { children: ReactNode; onHome: () => void }
           </div>
         </div>
       </header>
+
+      {howItWorksOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl sm:p-8">
+            <button
+              onClick={() => setHowItWorksOpen(false)}
+              className="absolute right-5 top-5 rounded-lg p-1.5 text-muted-foreground hover:bg-muted bg-transparent border-0 cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+            <div className="flex items-center gap-2 font-mono-app text-[10px] uppercase tracking-[.18em] text-primary mb-2">
+              <Sparkles size={13} /> Architecture &amp; Methodology
+            </div>
+            <h2 className="font-display text-2xl sm:text-3xl text-foreground">How ClearClause Works</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              ClearClause combines multi-stage Retrieval-Augmented Generation (RAG) with 7 specialized AI agents to deliver instant, audit-grade contract intelligence.
+            </p>
+
+            <div className="mt-6 space-y-4">
+              <div className="rounded-xl border border-border/80 bg-[#f6faf5] p-4">
+                <div className="flex items-center gap-2 text-sm font-semibold text-[#173c3b]">
+                  <Scale size={16} className="text-primary" /> 1. Structure-Aware Document Parsing
+                </div>
+                <p className="mt-1 text-xs text-[#466d68] leading-5">
+                  Uploaded contracts (PDF, DOCX, TXT) are decomposed into semantic clauses while preserving legal article and section headings.
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-border/80 bg-[#f6faf5] p-4">
+                <div className="flex items-center gap-2 text-sm font-semibold text-[#173c3b]">
+                  <Search size={16} className="text-primary" /> 2. 4-Stage Hybrid RAG Retrieval
+                </div>
+                <p className="mt-1 text-xs text-[#466d68] leading-5">
+                  Dense semantic vectors (FastEmbed) and lexical matching (BM25) query our 1,800+ chunk statutory legal knowledge base (Indian Contract Act, US/UK common law, GDPR). Results are fused using Reciprocal Rank Fusion (RRF).
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-border/80 bg-[#f6faf5] p-4">
+                <div className="flex items-center gap-2 text-sm font-semibold text-[#173c3b]">
+                  <Bot size={16} className="text-primary" /> 3. 7 Specialized ReAct Agents
+                </div>
+                <ul className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-[#466d68]">
+                  <li>• <strong>Summary Agent:</strong> Plain-language brief</li>
+                  <li>• <strong>Red Flag Detector:</strong> 14+ trap categories</li>
+                  <li>• <strong>Green Flag Detector:</strong> Protective clauses</li>
+                  <li>• <strong>Obligation Extractor:</strong> Commitments &amp; timing</li>
+                  <li>• <strong>Comparison Agent:</strong> Industry benchmarks</li>
+                  <li>• <strong>Risk Scorer:</strong> 0-100 numerical risk score</li>
+                  <li>• <strong>Negotiation Advisor:</strong> Counter-clauses</li>
+                </ul>
+              </div>
+
+              <div className="rounded-xl border border-border/80 bg-muted/50 p-4">
+                <div className="flex items-center gap-2 text-xs font-semibold text-foreground/80">
+                  <ShieldCheck size={14} className="text-primary" /> Privacy by Design
+                </div>
+                <p className="mt-1 text-[11px] text-muted-foreground leading-4">
+                  All analysis occurs in memory. Raw documents are not permanently stored or used to train third-party foundation models.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setHowItWorksOpen(false)}
+                className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 border-0 cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {children}
       <footer className="mx-auto flex max-w-[1440px] flex-col gap-4 border-t border-border/70 px-5 py-8 text-xs text-muted-foreground sm:px-8 lg:px-12">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -291,7 +367,7 @@ function Shell({ children, onHome }: { children: ReactNode; onHome: () => void }
         </div>
         <div className="flex items-center gap-2 text-[11px] text-muted-foreground/70 border-t border-border/50 pt-4">
           <Bot size={12} className="text-primary/50" />
-          <span>Agentic RAG powered by Mistral-7B · GTE-small embeddings · FAISS + BM25 hybrid retrieval · 7 specialized AI agents</span>
+          <span>Agentic RAG powered by Llama-3.1 / Mistral · FastEmbed embeddings · FAISS + BM25 hybrid retrieval · 7 specialized AI agents</span>
         </div>
         <div className="text-[11px] text-muted-foreground/60">
           Platform creators: <span className="font-semibold text-foreground/70">Kirti Kumari</span> &amp; <span className="font-semibold text-foreground/70">Kushagra Srivastava</span>
@@ -309,28 +385,44 @@ function UploadPanel({ onComplete }: { onComplete: (doc: AnalysisResult) => void
   const [content, setContent] = useState('');
   const [mimeType, setMimeType] = useState('');
   const [size, setSize] = useState(0);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const ingestFile = (file: File) => {
+    setSelectedFile(file);
     setFilename(file.name);
     setMimeType(file.type || 'application/octet-stream');
     setSize(file.size);
     setError('');
-    file.text().then((text) => setContent(text.slice(0, 300_000))).catch(() => setContent(''));
+    if (file.name.endsWith('.txt')) {
+      file.text().then((text) => setContent(text.slice(0, 300_000))).catch(() => setContent(''));
+    } else {
+      setContent('FILE_ATTACHED');
+    }
   };
 
   const submit = async () => {
-    if (!filename.trim() || content.length < 20 || loading) return;
+    if (!filename.trim() || loading) return;
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${API_BASE}/documents`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: filename.trim(), mimeType, content, size }),
-      });
+      let res: Response;
+      if (selectedFile) {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        res = await fetch(`${API_BASE}/documents`, {
+          method: 'POST',
+          body: formData,
+        });
+      } else {
+        res = await fetch(`${API_BASE}/documents`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: filename.trim(), mimeType, content, size }),
+        });
+      }
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || `Server error ${res.status}`);
@@ -404,7 +496,7 @@ function UploadPanel({ onComplete }: { onComplete: (doc: AnalysisResult) => void
             <button
               id="button-analyze-document"
               onClick={submit}
-              disabled={loading || content.length < 20}
+              disabled={loading || (!selectedFile && content.length < 20)}
               className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:-translate-y-0.5 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading
@@ -1030,11 +1122,38 @@ export default function App() {
   const [view, updateView] = useState<View>('library');
   const [selectedDoc, updateSelectedDoc] = useState<AnalysisResult | null>(null);
   const [library, setLibrary] = useState<LibraryDoc[]>([]);
+  const [docCache, setDocCache] = useState<Record<string, AnalysisResult>>({});
 
   setView = updateView;
   setSelectedDoc = updateSelectedDoc;
 
+  useEffect(() => {
+    fetch(`${API_BASE}/documents`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((docs: AnalysisResult[]) => {
+        if (Array.isArray(docs) && docs.length > 0) {
+          const cache: Record<string, AnalysisResult> = {};
+          const libDocs: LibraryDoc[] = docs.map((d) => {
+            cache[d.id] = d;
+            return {
+              id: d.id,
+              filename: d.filename,
+              size: d.size,
+              documentType: d.documentType,
+              riskLevel: d.riskLevel,
+              overallScore: d.overallScore,
+              createdAt: d.createdAt,
+            };
+          });
+          setDocCache(cache);
+          setLibrary(libDocs);
+        }
+      })
+      .catch((err) => console.log('Could not load initial library:', err));
+  }, []);
+
   const handleAnalyzed = (doc: AnalysisResult) => {
+    setDocCache((prev) => ({ ...prev, [doc.id]: doc }));
     setLibrary((prev) => {
       const exists = prev.find((d) => d.id === doc.id);
       if (exists) return prev;
@@ -1052,11 +1171,25 @@ export default function App() {
     updateView('detail');
   };
 
-  const handleOpen = (id: string) => {
-    const cached = library.find((d) => d.id === id) as unknown as AnalysisResult | undefined;
-    if (cached) {
-      updateSelectedDoc(cached as unknown as AnalysisResult);
+  const handleOpen = async (id: string) => {
+    // 1. check full doc cache first
+    if (docCache[id]) {
+      updateSelectedDoc(docCache[id]);
       updateView('detail');
+      return;
+    }
+
+    // 2. fetch full analysis from api
+    try {
+      const res = await fetch(`${API_BASE}/documents/${id}`);
+      if (res.ok) {
+        const fullDoc = await res.json() as AnalysisResult;
+        setDocCache((prev) => ({ ...prev, [fullDoc.id]: fullDoc }));
+        updateSelectedDoc(fullDoc);
+        updateView('detail');
+      }
+    } catch (err) {
+      console.error('Failed to load document analysis:', err);
     }
   };
 
